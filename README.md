@@ -1,41 +1,143 @@
 # PhotoBackup — dispozitiv portabil de backup automat
 
-Proiect de licență. Dispozitiv headless bazat pe Raspberry Pi 4 care, la introducerea unui SD card într-un USB card reader, copiază automat fișierele pe un SSD extern și le sincronizează pe Google Drive când are conexiune la internet.
+Proiect de licență. Dispozitiv headless bazat pe Raspberry Pi 4 care, la
+introducerea unui SD card într-un USB card reader, copiază automat fișierele pe
+un SSD extern și le sincronizează pe Google Drive când are conexiune la
+internet. Fără ecran, fără tastatură — plug & play.
+
+## Flux de operare
+
+```
+ ┌──────────────┐    plug SD    ┌──────────────┐   copy   ┌──────────────┐
+ │   camera     │ ────────────► │  card reader │ ───────► │  SSD (ext4)  │
+ │  SD card     │    (USB)      │  (USB)       │  rsync-  │ /mnt/backup- │
+ └──────────────┘               └──────────────┘  like    │   ssd/       │
+                                                          └──────┬───────┘
+                                                                 │ rclone
+                                                                 ▼
+                                                          ┌──────────────┐
+                                                          │ Google Drive │
+                                                          │ PhotoBackup/ │
+                                                          └──────────────┘
+```
+
+La fiecare inserție: daemon-ul detectează evenimentul prin `pyudev`, filtrează
+după vendor/model USB ca să nu confunde cardul reader cu SSD-ul, montează
+partiția `read-only` sub `/media/photobackup/<label>`, copiază fișierele noi
+(filtrate prin manifest global de deduplicare), calculează SHA256 pe fiecare
+fișier copiat comparând cu sursa, scrie un manifest JSON al backup-ului, și
+demontează cardul. Un timer systemd separat sincronizează periodic (10 min)
+backup-urile complete pe Google Drive via `rclone`, sărind folderele marcate
+`.incomplete`.
 
 ## Hardware
 
 - Raspberry Pi 4 (Raspberry Pi OS Lite 64-bit, hostname `photobackup`)
-- SSD extern USB (SanDisk Extreme 1TB) → `/mnt/backup-ssd` (ext4, label `BACKUP_SSD`)
-- USB SD Card Reader (Genesys Logic, vendor 05e3:0764) — slot SD + microSD
-- LED-uri pe GPIO (opțional): verde feedback OK, roșu feedback eroare
+- SSD extern USB 3.0 (SanDisk Extreme 1TB) montat la `/mnt/backup-ssd`
+  (ext4, label `BACKUP_SSD`)
+- USB SD Card Reader (Genesys Logic, `05e3:0764`) — identificat prin
+  `ID_VENDOR_ID` + `ID_MODEL_ID` în udev
+- LED-uri pe GPIO (opțional, încă neimplementat fizic):
+  - GPIO 17 = verde (idle fix / working blink)
+  - GPIO 27 = roșu (eroare)
 
 ## Structură pe SSD
 
 ```
 /mnt/backup-ssd/
-├── backups/          # foldere YYYY-MM-DD_HH-MM-SS/ cu fișierele copiate + manifest.json
-├── logs/             # photobackup.log (rotating)
-└── sync_queue/       # global_manifest.json (deduplicare) + sync_state.json
+├── backups/
+│   └── YYYY-MM-DD_HH-MM-SS_<label>/
+│       ├── <files copied from SD card, preserving subfolder structure>
+│       └── manifest.json           # listă fișiere + SHA256
+├── logs/
+│   ├── photobackup.log             # daemon principal (rotating 5×5MB)
+│   └── sync.log                    # sincronizare Google Drive
+└── sync_queue/
+    ├── global_manifest.json        # deduplicare cross-sesiuni
+    └── sync_state.json             # backup-uri deja urcate pe Drive
 ```
 
-## Module
+## Module Python (`photobackup/`)
 
 | Fișier | Rol |
 |---|---|
-| `photobackup/main.py` | Entry point — logging, LED idle, pornire monitor |
-| `photobackup/monitor.py` | Observer pyudev pentru evenimente `add` partiție SD |
-| `photobackup/mounter.py` | Mount/umount SD card prin `udisksctl` |
-| `photobackup/copier.py` | rsync + verificare SHA256 + marker `.incomplete` |
-| `photobackup/tracker.py` | Manifest global pentru deduplicare |
-| `photobackup/led.py` | Wrapper gpiozero (no-op dacă lipsește hardware) |
-| `photobackup/config.py` | Path-uri, ID-uri USB, pin-uri GPIO |
-| `photobackup/sync.py` | Sincronizare Google Drive (rclone), rulat de timer systemd |
+| `main.py` | Entry point — logging rotating, LED idle, pornire monitor |
+| `monitor.py` | `pyudev.MonitorObserver` — filtrează după vendor/model USB |
+| `mounter.py` | `mount`/`umount` prin sudo (NOPASSWD) la `/media/photobackup/<label>` |
+| `copier.py` | Copiere + verificare SHA256 + `.incomplete` marker + manifest JSON |
+| `tracker.py` | Manifest global pentru deduplicare între inserții |
+| `sync.py` | Upload periodic pe Google Drive via `rclone` |
+| `led.py` | Wrapper `gpiozero` — no-op dacă hardware-ul lipsește |
+| `config.py` | Path-uri, ID-uri USB, pin-uri GPIO, remote rclone |
 
 ## Servicii systemd
 
-- `photobackup.service` — daemon principal (urmărește SD card events)
-- `photobackup-sync.timer` — sincronizare Google Drive la fiecare 10 minute
+Fișiere în `systemd/`:
 
-## Instalare
+- `photobackup.service` — daemon principal, pornit la `multi-user.target`,
+  `Restart=on-failure` după 5s
+- `photobackup-sync.service` + `.timer` — `oneshot` la fiecare 10 min
+  (`OnBootSec=2min`, `OnUnitActiveSec=10min`, `Persistent=true`)
 
-Vezi planul detaliat în `docs/SETUP.md` (sau planul de execuție pas-cu-pas folosit la dezvoltare).
+## Robustețe
+
+- **Deduplicare**: manifest global `(path, size, mtime) → sha256`. Dacă
+  reintroduci același card, se loghează "0 fișiere noi" și folderul de backup
+  gol este șters.
+- **Scoatere prematură a cardului**: `.incomplete` marker rămâne în folder,
+  iar sync-ul pe Drive sare peste el. Un retry ulterior va copia doar
+  fișierele lipsă.
+- **Pi pornește fără SSD**: `nofail` în `/etc/fstab` — sistemul bootează
+  oricum; daemon-ul scrie loguri doar dacă mount point-ul există.
+- **Identificare hardware strictă**: prin vendor + model USB, nu după
+  litera de device (care poate varia la reboot).
+- **Mount read-only**: cardul SD nu e modificat niciodată — rollback
+  natural.
+- **Verificare integritate**: SHA256 calculat pe destinație este comparat
+  cu SHA256-ul sursei pentru fiecare fișier. Mismatch → `.incomplete` +
+  log de eroare.
+- **Scope OAuth minim**: `drive.file` — rclone vede doar fișierele create
+  de acest app; dacă Pi-ul e compromis, restul Drive-ului rămâne protejat.
+
+## Instalare pe Pi
+
+Rezumat — pași detaliați mai jos:
+
+1. Raspberry Pi OS Lite 64-bit, SSH activat, Wi-Fi configurat prin Pi Imager
+2. `sudo apt install python3-pyudev udisks2 exfat-fuse exfatprogs rsync rclone git`
+3. Formatează SSD-ul ext4 (`mkfs.ext4 -L BACKUP_SSD`), adaugă în `/etc/fstab`
+   cu UUID și `nofail,noatime`
+4. `git clone` acest repo în `/home/admin/photobackup/`
+5. Creează venv: `python3 -m venv --system-site-packages venv`, apoi
+   `pip install gpiozero` (restul pachetelor din system site-packages)
+6. Configurează rclone pentru Google Drive cu scope `drive.file`:
+   - Pe o mașină cu browser: `rclone authorize "drive" "$(echo -n '{"scope":"drive.file"}' | base64 | tr -d '=' | tr '+/' '-_')"`
+   - Copiază token-ul în `~/.config/rclone/rclone.conf` pe Pi
+7. Instalează serviciile:
+   ```
+   sudo cp systemd/*.service systemd/*.timer /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now photobackup.service photobackup-sync.timer
+   ```
+
+## Verificare
+
+- `systemctl status photobackup` → `active (running)`
+- `systemctl list-timers photobackup-sync.timer` → programare vizibilă
+- Inserează un SD card → urmărește `journalctl -u photobackup -f`
+- `ls /mnt/backup-ssd/backups/` → vezi folderul de backup cu timestamp
+- `rclone lsf gdrive:PhotoBackup/` → fișierele urcate pe Drive
+
+## Troubleshooting
+
+| Simptom | Cauză probabilă | Fix |
+|---|---|---|
+| Daemon nu pornește | venv lipsă sau `pyudev` not found | `python3 -m venv --system-site-packages venv` |
+| "Not authorized" la mount | polkit blochează `udisksctl` headless | Folosim `sudo mount` direct (cu NOPASSWD) |
+| Card detectat dar nu se montează | fs-ul nu e suportat | `sudo apt install exfat-fuse ntfs-3g` |
+| Sync Drive loop-uie pe eroare | expirare refresh_token | Reauthorizează cu `rclone authorize` |
+| `journalctl` gol după inserție | vendor/model USB nu se potrivește | `udevadm info -q property -n /dev/sdX` pentru debug |
+
+## Licență
+
+Proiect academic — cod open-source (MIT).
