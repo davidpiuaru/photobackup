@@ -1,0 +1,13 @@
+[Unit]
+Description=PhotoBackup — sincronizare Google Drive (one-shot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/photobackup
+ExecStart=/home/admin/photobackup/venv/bin/python -m photobackup.sync
+StandardOutput=journal
+StandardError=journal

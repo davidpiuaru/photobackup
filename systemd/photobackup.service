@@ -1,0 +1,18 @@
+[Unit]
+Description=PhotoBackup Daemon (auto-copy SD cards to SSD)
+After=multi-user.target local-fs.target
+Wants=local-fs.target
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/photobackup
+ExecStart=/home/admin/photobackup/venv/bin/python -m photobackup.main
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

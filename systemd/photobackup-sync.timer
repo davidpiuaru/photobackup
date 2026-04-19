@@ -1,0 +1,11 @@
+[Unit]
+Description=PhotoBackup — sync Google Drive la fiecare 10 minute
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+Unit=photobackup-sync.service
+Persistent=true
+
+[Install]
+WantedBy=timers.target
