@@ -1,0 +1,18 @@
+[Unit]
+Description=PhotoBackup API Server (FastAPI/uvicorn)
+After=network-online.target photobackup.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=admin
+Group=admin
+WorkingDirectory=/home/admin/photobackup
+ExecStart=/home/admin/photobackup/venv/bin/uvicorn api.main:app --host 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

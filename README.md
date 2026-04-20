@@ -78,6 +78,39 @@ Fișiere în `systemd/`:
   `Restart=on-failure` după 5s
 - `photobackup-sync.service` + `.timer` — `oneshot` la fiecare 10 min
   (`OnBootSec=2min`, `OnUnitActiveSec=10min`, `Persistent=true`)
+- `photobackup-api.service` — FastAPI (uvicorn) pe `:8080` pentru app-ul iOS
+- `photobackup-wifi.service` — wifi_manager.py (AP ↔ Client)
+- `avahi-photobackup.service` — se copiază la `/etc/avahi/services/photobackup.service`
+  pentru descoperire Bonjour (`_photobackup._tcp`)
+
+## App iOS companion
+
+Proiectul SwiftUI e în [ios/](ios/). Se generează `.xcodeproj` cu
+[XcodeGen](https://github.com/yonaskolb/XcodeGen):
+
+```bash
+brew install xcodegen
+cd ios/
+xcodegen generate
+open PhotoBackup.xcodeproj
+```
+
+Aplicația detectează automat Pi-ul pe rețea (Bonjour) sau în mod hotspot
+(`10.42.0.1`) și expune 5 tab-uri: Dashboard, Backup, Galerie, Wi-Fi, Setări.
+Vezi [ios/README.md](ios/README.md) pentru detalii.
+
+## Wi-Fi Manager (AP ↔ Client automat)
+
+`photobackup/wifi_manager.py` rulează ca serviciu systemd (root). Logică:
+
+1. La pornire încearcă conexiunile Wi-Fi salvate; dacă niciuna nu e disponibilă
+   în 30s → pornește hotspot-ul `PhotoBackup-AP` (parola implicită
+   `photobackup123`, IP `10.42.0.1`).
+2. În mod client: dacă pierde conexiunea >60s → revine automat la AP.
+3. În mod AP: primește comenzi din `/tmp/photobackup-wifi.cmd` (scris de API)
+   pentru a comuta la o rețea nouă aleasă din app-ul iOS.
+
+Stare curentă în `/tmp/wifi_state.json` (citită de API).
 
 ## Robustețe
 
@@ -104,20 +137,26 @@ Fișiere în `systemd/`:
 Rezumat — pași detaliați mai jos:
 
 1. Raspberry Pi OS Lite 64-bit, SSH activat, Wi-Fi configurat prin Pi Imager
-2. `sudo apt install python3-pyudev udisks2 exfat-fuse exfatprogs rsync rclone git`
+2. `sudo apt install python3-pyudev udisks2 exfat-fuse exfatprogs rsync rclone git avahi-daemon network-manager`
 3. Formatează SSD-ul ext4 (`mkfs.ext4 -L BACKUP_SSD`), adaugă în `/etc/fstab`
    cu UUID și `nofail,noatime`
 4. `git clone` acest repo în `/home/admin/photobackup/`
 5. Creează venv: `python3 -m venv --system-site-packages venv`, apoi
-   `pip install gpiozero` (restul pachetelor din system site-packages)
+   `./venv/bin/pip install -r requirements.txt`
 6. Configurează rclone pentru Google Drive cu scope `drive.file`:
    - Pe o mașină cu browser: `rclone authorize "drive" "$(echo -n '{"scope":"drive.file"}' | base64 | tr -d '=' | tr '+/' '-_')"`
    - Copiază token-ul în `~/.config/rclone/rclone.conf` pe Pi
 7. Instalează serviciile:
    ```
-   sudo cp systemd/*.service systemd/*.timer /etc/systemd/system/
+   sudo cp systemd/photobackup.service \
+           systemd/photobackup-sync.service systemd/photobackup-sync.timer \
+           systemd/photobackup-api.service systemd/photobackup-wifi.service \
+           /etc/systemd/system/
+   sudo cp systemd/avahi-photobackup.service /etc/avahi/services/photobackup.service
    sudo systemctl daemon-reload
-   sudo systemctl enable --now photobackup.service photobackup-sync.timer
+   sudo systemctl enable --now photobackup.service photobackup-sync.timer \
+                               photobackup-api.service photobackup-wifi.service
+   sudo systemctl restart avahi-daemon
    ```
 
 ## Verificare

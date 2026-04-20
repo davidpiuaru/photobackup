@@ -1,0 +1,19 @@
+[Unit]
+Description=PhotoBackup Wi-Fi Manager (AP <-> Client switching)
+After=NetworkManager.service
+Requires=NetworkManager.service
+
+[Service]
+Type=simple
+# Ruleaza ca root pentru a putea modifica nmcli fara polkit
+User=root
+Group=root
+WorkingDirectory=/home/admin/photobackup
+ExecStart=/home/admin/photobackup/venv/bin/python -m photobackup.wifi_manager
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

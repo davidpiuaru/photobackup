@@ -1,2 +1,8 @@
 pyudev>=0.24
 gpiozero>=2.0
+fastapi>=0.110
+uvicorn[standard]>=0.29
+psutil>=5.9
+Pillow>=10.0
+rawpy>=0.19
+pydantic>=2.5

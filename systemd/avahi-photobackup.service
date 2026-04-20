@@ -1,0 +1,20 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<!--
+  Instaleaza la /etc/avahi/services/photobackup.service
+  Permite app-ului iOS sa descopere Pi-ul prin Bonjour.
+-->
+<service-group>
+  <name replace-wildcards="yes">PhotoBackup on %h</name>
+  <service>
+    <type>_photobackup._tcp</type>
+    <port>8080</port>
+    <txt-record>path=/api</txt-record>
+    <txt-record>version=1.0</txt-record>
+  </service>
+  <service>
+    <type>_http._tcp</type>
+    <port>8080</port>
+    <txt-record>path=/api/status</txt-record>
+  </service>
+</service-group>

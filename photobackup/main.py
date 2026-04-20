@@ -1,7 +1,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
 
-from . import config, monitor
+from . import config, monitor, status
 from .copier import backup_card
 from .led import LedFeedback
 from .mounter import MountError, mount, unmount
@@ -50,6 +50,9 @@ def main():
                 unmount(device_node)
             except Exception as e:
                 log.warning("Unmount esuat: %s", e)
+            status.update_sdcard(force=True, connected=False, label=None,
+                                 filesystem=None, size_bytes=0, used_bytes=0,
+                                 mount_point=None)
 
     try:
         monitor.watch(handle)
