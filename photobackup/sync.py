@@ -191,6 +191,9 @@ def sync_folder(local_dir: Path, remote_subpath: str, session_id: str) -> bool:
 
 def main():
     setup_logging()
+    # Curatam orice comanda de control veche (cancel/pause/resume) ramasa in /tmp
+    # de la o rulare anterioara — altfel ar bloca sync-ul curent.
+    _clear_control()
     if not has_internet():
         log.info("Fara internet — skip sync")
         status.update_sync(force=True, state="waiting_internet")
@@ -221,6 +224,7 @@ def main():
             continue
         if _read_control() == "cancel":
             log.warning("Sync oprit la cerere externa")
+            _clear_control()
             break
         if sync_folder(backup, backup.name, backup.name):
             completed.add(backup.name)

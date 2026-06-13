@@ -25,8 +25,13 @@ def card_label(device: pyudev.Device) -> str:
     return device.get("ID_FS_LABEL") or device.get("ID_FS_LABEL_ENC") or "UNTITLED"
 
 
+def card_fstype(device: pyudev.Device) -> str | None:
+    """Tipul de filesystem raportat de udev (ex: exfat, vfat, ntfs)."""
+    return device.get("ID_FS_TYPE")
+
+
 def watch(on_card_inserted):
-    """Loop blocking: apeleaza callback(device_node, label) la insertie SD card."""
+    """Loop blocking: apeleaza callback(device_node, label, fstype) la insertie SD card."""
     context = pyudev.Context()
     monitor = pyudev.Monitor.from_netlink(context)
     monitor.filter_by(subsystem="block")
@@ -44,6 +49,6 @@ def watch(on_card_inserted):
         # Mic delay ca udisks/kernel sa termine setup-ul
         time.sleep(1)
         try:
-            on_card_inserted(device.device_node, card_label(device))
+            on_card_inserted(device.device_node, card_label(device), card_fstype(device))
         except Exception as e:
             log.exception("Eroare in handler: %s", e)

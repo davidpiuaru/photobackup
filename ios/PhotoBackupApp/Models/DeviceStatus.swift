@@ -27,6 +27,17 @@ struct BackupState: Codable, Equatable {
     }
 
     var isActive: Bool { state == "copying" }
+
+    var stateLabel: String {
+        switch state {
+        case "idle": "Inactiv"
+        case "copying": "Copiez"
+        case "completed": "Finalizat"
+        case "error": "Eroare"
+        case "cancelled": "Anulat"
+        default: state.capitalized
+        }
+    }
 }
 
 struct SyncState: Codable, Equatable {
@@ -45,6 +56,19 @@ struct SyncState: Codable, Equatable {
     }
 
     var isActive: Bool { state == "syncing" || state == "paused" }
+
+    var stateLabel: String {
+        switch state {
+        case "idle": "Inactiv"
+        case "syncing": "Sincronizez"
+        case "paused": "Pauză"
+        case "completed": "Finalizat"
+        case "error": "Eroare"
+        case "waiting_internet": "Aștept internet"
+        case "cancelled": "Anulat"
+        default: state.capitalized
+        }
+    }
 }
 
 struct SDCardInfo: Codable, Equatable {

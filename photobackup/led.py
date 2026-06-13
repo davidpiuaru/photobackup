@@ -7,7 +7,7 @@ log = logging.getLogger(__name__)
 try:
     from gpiozero import LED
     _GPIO_AVAILABLE = True
-except (ImportError, Exception) as e:
+except Exception as e:  # ImportError sau erori de init pe non-Pi
     log.warning("gpiozero indisponibil (%s) — LED-urile vor fi no-op", e)
     _GPIO_AVAILABLE = False
 

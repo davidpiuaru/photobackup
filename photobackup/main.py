@@ -28,13 +28,13 @@ def main():
     led.idle()
     log.info("PhotoBackup pornit — astept SD card")
 
-    def handle(device_node: str, label: str):
+    def handle(device_node: str, label: str, fstype: str | None = None):
         led.working()
         mount_point = None
         try:
             mount_point = mount(device_node)
             log.info("Card montat la %s", mount_point)
-            result = backup_card(mount_point, label=label)
+            result = backup_card(mount_point, label=label, fstype=fstype)
             if result["ok"]:
                 led.idle()
             else:

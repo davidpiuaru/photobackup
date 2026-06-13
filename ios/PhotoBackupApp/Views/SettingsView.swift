@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var apSavedMessage: String?
     @State private var apErrorMessage: String?
     @State private var currentHostname: String = ""
+    @State private var apiToken: String = ""
 
     var body: some View {
         NavigationStack {
@@ -19,6 +20,8 @@ struct SettingsView: View {
                     TextField("Base URL", text: $baseURLText)
                         .keyboardType(.URL)
                         .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    SecureField("Token API (opțional)", text: $apiToken)
                         .textInputAutocapitalization(.never)
                     Button("Salvează & verifică") {
                         Task { await applyBaseURL() }
@@ -79,13 +82,15 @@ struct SettingsView: View {
         baseURLText = appState.settings.baseURL.absoluteString
         refreshInterval = appState.settings.refreshInterval
         notificationsEnabled = appState.settings.notificationsEnabled
+        apiToken = appState.settings.apiToken
         Task {
             if let status: DeviceStatus = try? await api.get("api/status") {
                 currentHostname = status.system.hostname
             }
             if let state: WiFiState = try? await api.get("api/wifi/current") {
                 apSSID = state.apSsid
-                apPassword = state.apPassword
+                // Parola AP nu mai e expusa de API (secret); ramane goala —
+                // introdu una noua (min 8) doar daca vrei sa o schimbi.
             }
         }
     }
@@ -95,7 +100,9 @@ struct SettingsView: View {
         let testApi = APIService(baseURL: url)
         if await testApi.ping(timeout: 3) {
             api.setBaseURL(url)
+            api.token = apiToken
             appState.settings.baseURL = url
+            appState.settings.apiToken = apiToken
             appState.settings.save()
         } else {
             apErrorMessage = "Nu răspunde la \(url.absoluteString)"

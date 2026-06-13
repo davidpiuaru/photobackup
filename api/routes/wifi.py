@@ -38,43 +38,38 @@ def saved_networks() -> list[str]:
 
 @router.delete("/saved/{ssid}")
 def delete_saved(ssid: str) -> dict:
-    wifi_state.send_command(f"delete-saved:{ssid}")
+    wifi_state.send_command({"cmd": "delete-saved", "ssid": ssid})
     return {"ok": True}
 
 
-@router.post("/connect")
+@router.post("/connect", status_code=202)
 def connect(req: WiFiConnectRequest) -> dict:
-    pw = req.password or ""
-    wifi_state.send_command(f"connect:{req.ssid}:{pw}")
-    # Asteapta 20s ca wifi_manager sa actualizeze state-ul
-    final = wifi_state.wait_for_state(
-        lambda s: s.get("mode") == "client" and s.get("client_ssid") == req.ssid,
-        timeout=30.0,
-    )
-    if final is None:
-        raise HTTPException(504, "Conectarea nu a reusit in 30s")
-    return {"ok": True, "state": final}
+    wifi_state.send_command({"cmd": "connect", "ssid": req.ssid, "password": req.password or ""})
+    # Fire-and-forget: in mod AP, Pi-ul opreste hotspotul ca sa comute, deci
+    # raspunsul nu ar mai ajunge la telefon daca am astepta. App-ul afiseaza
+    # ecranul de tranzitie si face polling de reconectare pe noua retea.
+    return {"ok": True, "switching_to": req.ssid}
 
 
 @router.post("/disconnect")
 def disconnect() -> dict:
-    wifi_state.send_command("disconnect")
+    wifi_state.send_command({"cmd": "disconnect"})
     return {"ok": True}
 
 
 @router.post("/start-ap")
 def start_ap() -> dict:
-    wifi_state.send_command("start-ap")
+    wifi_state.send_command({"cmd": "start-ap"})
     return {"ok": True}
 
 
 @router.post("/rescan")
 def rescan() -> dict:
-    wifi_state.send_command("rescan")
+    wifi_state.send_command({"cmd": "rescan"})
     return {"ok": True}
 
 
 @router.post("/ap-settings")
 def ap_settings(req: APSettingsRequest) -> dict:
-    wifi_state.send_command(f"set-ap:{req.ssid}:{req.password}")
+    wifi_state.send_command({"cmd": "set-ap", "ssid": req.ssid, "password": req.password})
     return {"ok": True}

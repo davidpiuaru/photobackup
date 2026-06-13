@@ -65,7 +65,7 @@ struct BackupProgressCard: View {
                 Label("Backup SD → SSD", systemImage: "externaldrive.badge.timemachine")
                     .font(.title3.bold())
                 Spacer()
-                StatusIndicator(level: level, text: state.state.capitalized)
+                StatusIndicator(level: level, text: state.stateLabel)
             }
 
             CircularProgressView(progress: state.progress, tint: tint)
@@ -141,7 +141,7 @@ struct SyncProgressCard: View {
                 Label("Sync Google Drive", systemImage: "icloud.and.arrow.up")
                     .font(.title3.bold())
                 Spacer()
-                StatusIndicator(level: level, text: state.state.capitalized.replacingOccurrences(of: "_", with: " "))
+                StatusIndicator(level: level, text: state.stateLabel)
             }
 
             if state.isActive || state.state == "completed" {

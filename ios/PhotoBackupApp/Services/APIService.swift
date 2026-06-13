@@ -3,6 +3,8 @@ import Foundation
 @Observable
 final class APIService {
     var baseURL: URL
+    /// Token API optional; trimis ca header `X-PhotoBackup-Token` daca e setat.
+    var token: String = ""
     private let session: URLSession
     private let decoder: JSONDecoder
     private let encoder: JSONEncoder
@@ -58,14 +60,33 @@ final class APIService {
     }
 
     func thumbnailURL(sessionId: String, filename: String) -> URL {
+        imageURL(prefix: "api/thumbnails", sessionId: sessionId, filename: filename)
+    }
+
+    func previewURL(sessionId: String, filename: String) -> URL {
+        imageURL(prefix: "api/preview", sessionId: sessionId, filename: filename)
+    }
+
+    private func imageURL(prefix: String, sessionId: String, filename: String) -> URL {
         // encoding: path param :path in FastAPI permite slash-uri
         let encoded = filename.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? filename
-        return baseURL.appendingPathComponent("api/thumbnails/\(sessionId)/\(encoded)")
+        let base = baseURL.appendingPathComponent("\(prefix)/\(sessionId)/\(encoded)")
+        // AsyncImage nu poate seta headere -> trimitem tokenul prin query daca e setat.
+        guard !token.isEmpty,
+              var comps = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
+            return base
+        }
+        comps.queryItems = [URLQueryItem(name: "token", value: token)]
+        return comps.url ?? base
     }
 
     // MARK: - Helpers
 
     private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
+        var request = request
+        if !token.isEmpty {
+            request.setValue(token, forHTTPHeaderField: "X-PhotoBackup-Token")
+        }
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {

@@ -23,6 +23,8 @@ final class AppState {
     init() {
         let settings = AppSettings.load()
         self.settings = settings
-        self.api = APIService(baseURL: settings.baseURL)
+        let api = APIService(baseURL: settings.baseURL)
+        api.token = settings.apiToken
+        self.api = api
     }
 }

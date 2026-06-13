@@ -84,12 +84,27 @@ struct SessionDetailView: View {
     var body: some View {
         ScrollView {
             if let vm {
+                if let rs = vm.ratingStatus, rs.isActive {
+                    VStack(spacing: 6) {
+                        HStack {
+                            Label("Evaluez cu AI…", systemImage: "sparkles")
+                            Spacer()
+                            Text("\(rs.filesDone)/\(rs.filesTotal)")
+                        }
+                        .font(.subheadline)
+                        ProgressView(value: rs.progress)
+                    }
+                    .padding()
+                }
                 LazyVGrid(columns: columns, spacing: 2) {
                     ForEach(Array(vm.thumbnails.enumerated()), id: \.element.id) { idx, t in
                         Button {
                             selectedIndex = idx
                         } label: {
-                            ThumbnailGridItem(url: api.thumbnailURL(sessionId: sessionId, filename: t.filename))
+                            ThumbnailGridItem(
+                                url: api.thumbnailURL(sessionId: sessionId, filename: t.filename),
+                                rating: t.rating
+                            )
                         }
                         .buttonStyle(.plain)
                         .onAppear {
@@ -114,6 +129,20 @@ struct SessionDetailView: View {
         }
         .navigationTitle(sessionLabel.isEmpty ? sessionId : sessionLabel)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    if let vm { Task { await vm.rate(sessionId: sessionId) } }
+                } label: {
+                    if vm?.isRating == true {
+                        ProgressView()
+                    } else {
+                        Label("Evaluează cu AI", systemImage: "sparkles")
+                    }
+                }
+                .disabled(vm?.isRating == true)
+            }
+        }
         .onAppear {
             if vm == nil {
                 vm = GalleryViewModel(api: api)
@@ -125,6 +154,7 @@ struct SessionDetailView: View {
                 await vm.loadMoreThumbnails(for: sessionId)
             }
         }
+        .onDisappear { vm?.stopRatingPolling() }
         .fullScreenCover(item: Binding(
             get: { selectedIndex.map { IndexWrapper(value: $0) } },
             set: { selectedIndex = $0?.value }

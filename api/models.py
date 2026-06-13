@@ -46,9 +46,11 @@ class SyncState(BaseModel):
 
 
 class WiFiState(BaseModel):
+    # ap_password NU e expus in raspunsuri (secret) — ramane doar in state file intern.
+    model_config = {"extra": "ignore"}
+
     mode: Literal["ap", "client", "unknown"] = "unknown"
     ap_ssid: str
-    ap_password: str
     ap_ip: str
     client_ssid: Optional[str] = None
     client_ip: Optional[str] = None
@@ -92,6 +94,7 @@ class SessionFile(BaseModel):
     path: str
     size: int
     sha256: Optional[str] = None
+    rating: Optional[int] = None
 
 
 class SessionSummary(BaseModel):
@@ -112,6 +115,7 @@ class ThumbnailEntry(BaseModel):
     filename: str
     url: str
     size: int
+    rating: Optional[int] = None
 
 
 class PaginatedThumbnails(BaseModel):
@@ -126,3 +130,13 @@ class Notification(BaseModel):
     type: Literal["info", "success", "warning", "error"]
     message: str
     timestamp: str
+
+
+class RatingStatus(BaseModel):
+    state: Literal["idle", "rating", "completed", "error"] = "idle"
+    session_id: Optional[str] = None
+    current_file: Optional[str] = None
+    files_done: int = 0
+    files_total: int = 0
+    method: Optional[str] = None
+    started_at: Optional[str] = None

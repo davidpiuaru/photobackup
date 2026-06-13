@@ -34,7 +34,7 @@ def _current_wifi_ssid() -> str | None:
 log = logging.getLogger(__name__)
 
 STATE_FILE = Path("/tmp/wifi_state.json")
-CMD_FILE = Path("/tmp/photobackup-wifi.cmd")
+CMD_DIR = Path("/tmp/photobackup-wifi.cmd.d")
 
 _DEFAULT = {
     "mode": "unknown",
@@ -64,10 +64,19 @@ def read_state() -> dict:
     return state
 
 
-def send_command(cmd: str) -> None:
-    """Scrie o comanda in /tmp/photobackup-wifi.cmd (wifi_manager o consuma)."""
+def send_command(cmd: dict) -> None:
+    """Pune o comanda (dict JSON) in coada consumata de wifi_manager.
+
+    Fiecare comanda e un fisier separat, ordonabil temporal — fara pierderi
+    daca se trimit doua comenzi rapid una dupa alta. JSON-ul e robust la
+    caractere speciale (ex: ':' in SSID/parola).
+    """
     try:
-        CMD_FILE.write_text(cmd)
+        CMD_DIR.mkdir(parents=True, exist_ok=True)
+        name = f"{time.time_ns()}.json"
+        tmp = CMD_DIR / (name + ".tmp")
+        tmp.write_text(json.dumps(cmd))
+        tmp.rename(CMD_DIR / name)
     except OSError as e:
         log.error("Trimitere comanda Wi-Fi esuata: %s", e)
         raise

@@ -14,6 +14,8 @@ struct AppSettings: Codable, Equatable {
     var baseURL: URL
     var refreshInterval: TimeInterval
     var notificationsEnabled: Bool
+    /// Token API optional (gol = auth dezactivat pe Pi).
+    var apiToken: String = ""
 
     static let defaults = AppSettings(
         baseURL: Constants.defaultBaseURL,
@@ -23,16 +25,19 @@ struct AppSettings: Codable, Equatable {
 
     static func load() -> AppSettings {
         let d = UserDefaults.standard
+        let token = d.string(forKey: "apiToken") ?? ""
         guard
             let urlStr = d.string(forKey: "baseURL"),
             let url = URL(string: urlStr)
         else {
-            return .defaults
+            return AppSettings(baseURL: Constants.defaultBaseURL, refreshInterval: 5,
+                               notificationsEnabled: true, apiToken: token)
         }
         return AppSettings(
             baseURL: url,
             refreshInterval: d.double(forKey: "refreshInterval") > 0 ? d.double(forKey: "refreshInterval") : 5,
-            notificationsEnabled: (d.object(forKey: "notificationsEnabled") as? Bool) ?? true
+            notificationsEnabled: (d.object(forKey: "notificationsEnabled") as? Bool) ?? true,
+            apiToken: token
         )
     }
 
@@ -41,5 +46,6 @@ struct AppSettings: Codable, Equatable {
         d.set(baseURL.absoluteString, forKey: "baseURL")
         d.set(refreshInterval, forKey: "refreshInterval")
         d.set(notificationsEnabled, forKey: "notificationsEnabled")
+        d.set(apiToken, forKey: "apiToken")
     }
 }

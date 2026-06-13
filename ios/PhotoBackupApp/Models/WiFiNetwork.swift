@@ -22,7 +22,6 @@ struct WiFiNetwork: Codable, Identifiable, Hashable {
 struct WiFiState: Codable, Equatable {
     let mode: String
     let apSsid: String
-    let apPassword: String
     let apIp: String
     let clientSsid: String?
     let clientIp: String?

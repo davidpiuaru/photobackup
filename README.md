@@ -107,10 +107,31 @@ Vezi [ios/README.md](ios/README.md) pentru detalii.
    în 30s → pornește hotspot-ul `PhotoBackup-AP` (parola implicită
    `photobackup123`, IP `10.42.0.1`).
 2. În mod client: dacă pierde conexiunea >60s → revine automat la AP.
-3. În mod AP: primește comenzi din `/tmp/photobackup-wifi.cmd` (scris de API)
-   pentru a comuta la o rețea nouă aleasă din app-ul iOS.
+3. În mod AP: primește comenzi dintr-o coadă de fișiere JSON în
+   `/tmp/photobackup-wifi.cmd.d/` (scrise de API) pentru a comuta la o rețea
+   nouă aleasă din app-ul iOS.
 
 Stare curentă în `/tmp/wifi_state.json` (citită de API).
+
+## Rating AI (scor 1-5 stele)
+
+Dispozitivul poate evalua calitatea pozelor și scrie un **rating 1-5 stele** în
+metadata, **on-device** (pe Pi). Se declanșează **manual din app** (butonul
+„Evaluează cu AI" pe o sesiune din galerie).
+
+- **Model:** NIMA (estetică) prin ONNX Runtime pe CPU; dacă modelul lipsește,
+  **fallback automat pe euristică** (claritate/expunere/contrast). Vezi
+  [models/README.md](models/README.md).
+- **Unde se scrie:** JPEG/PNG/HEIC → rating încorporat (`XMP:Rating` +
+  `EXIF:Rating`); RAW (CR3/ARW/NEF…) → **sidecar `.xmp`** (standard Adobe,
+  nedistructiv — RAW-ul nu e atins). Plus în `manifest.json`, pentru afișare în app.
+- **Flux:** `POST /api/sessions/{id}/rate` → pornește `python -m
+  photobackup.rater <id>` (proces separat, fără sudo, citește/scrie doar copiile
+  de pe SSD) → progres în `status.json` → app afișează stelele + bara de progres.
+- **Re-sync:** după evaluare, sesiunea e remarcată pentru re-upload, ca
+  ratingurile (inclusiv sidecar-urile `.xmp`) să ajungă și pe Google Drive.
+- **Dependențe:** `pip install -r requirements.txt` (onnxruntime, numpy) +
+  `sudo apt install libimage-exiftool-perl`. Modelul ONNX e opțional.
 
 ## Robustețe
 
@@ -118,8 +139,10 @@ Stare curentă în `/tmp/wifi_state.json` (citită de API).
   reintroduci același card, se loghează "0 fișiere noi" și folderul de backup
   gol este șters.
 - **Scoatere prematură a cardului**: `.incomplete` marker rămâne în folder,
-  iar sync-ul pe Drive sare peste el. Un retry ulterior va copia doar
-  fișierele lipsă.
+  iar sync-ul pe Drive sare peste el. Fișierele deja copiate și verificate
+  (SHA256) sunt salvate incremental în manifestul global, așa că la
+  reintroducerea cardului doar fișierele rămase sunt copiate (într-o sesiune
+  nouă) — nu se re-copiază tot.
 - **Pi pornește fără SSD**: `nofail` în `/etc/fstab` — sistemul bootează
   oricum; daemon-ul scrie loguri doar dacă mount point-ul există.
 - **Identificare hardware strictă**: prin vendor + model USB, nu după
@@ -137,7 +160,7 @@ Stare curentă în `/tmp/wifi_state.json` (citită de API).
 Rezumat — pași detaliați mai jos:
 
 1. Raspberry Pi OS Lite 64-bit, SSH activat, Wi-Fi configurat prin Pi Imager
-2. `sudo apt install python3-pyudev udisks2 exfat-fuse exfatprogs rsync rclone git avahi-daemon network-manager`
+2. `sudo apt install python3-pyudev udisks2 exfat-fuse exfatprogs rsync rclone git avahi-daemon network-manager libimage-exiftool-perl`
 3. Formatează SSD-ul ext4 (`mkfs.ext4 -L BACKUP_SSD`), adaugă în `/etc/fstab`
    cu UUID și `nofail,noatime`
 4. `git clone` acest repo în `/home/admin/photobackup/`
@@ -153,11 +176,23 @@ Rezumat — pași detaliați mai jos:
            systemd/photobackup-api.service systemd/photobackup-wifi.service \
            /etc/systemd/system/
    sudo cp systemd/avahi-photobackup.service /etc/avahi/services/photobackup.service
+   sudo install -m 0440 systemd/photobackup-sync.sudoers /etc/sudoers.d/photobackup-sync
    sudo systemctl daemon-reload
    sudo systemctl enable --now photobackup.service photobackup-sync.timer \
                                photobackup-api.service photobackup-wifi.service
    sudo systemctl restart avahi-daemon
    ```
+   Regula sudoers permite butonului „Sync acum" din app (API-ul rulează ca
+   `admin`) să pornească unit-ul de sync fără parolă.
+8. *(Opțional)* Securizează API-ul cu un token partajat — altfel orice dispozitiv
+   din rețea poate controla Pi-ul:
+   ```
+   sudo mkdir -p /etc/photobackup
+   openssl rand -hex 16 | sudo tee /etc/photobackup/api.token
+   sudo systemctl restart photobackup-api
+   ```
+   Apoi introdu același token în app la **Setări → Token API**. Dacă fișierul
+   lipsește, autentificarea e dezactivată (comportament implicit).
 
 ## Verificare
 

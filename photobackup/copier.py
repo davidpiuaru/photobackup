@@ -2,6 +2,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import shutil
 import time
 from datetime import datetime
@@ -14,6 +15,8 @@ log = logging.getLogger(__name__)
 
 _HASH_CHUNK = 1024 * 1024
 _CANCEL_FILE = Path("/tmp/photobackup-backup.control")
+# Pentru numele folderului de sesiune: pastram doar caractere sigure de path.
+_SANITIZE_LABEL = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def _sha256(path: Path) -> str:
@@ -56,12 +59,14 @@ def _clear_cancel() -> None:
         pass
 
 
-def backup_card(source: Path, label: str = "card") -> dict:
+def backup_card(source: Path, label: str = "card", fstype: str | None = None) -> dict:
     """Copiaza fisierele noi de pe SD card pe SSD. Returneaza un sumar."""
     _clear_cancel()
     config.BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    session_id = f"{timestamp}_{label}"
+    # Sanitizam doar numele folderului (label-ul original ramane pentru afisare/status).
+    safe_label = _SANITIZE_LABEL.sub("_", label).strip("_") or "card"
+    session_id = f"{timestamp}_{safe_label}"
     dest_dir = config.BACKUPS_DIR / session_id
     dest_dir.mkdir(parents=True)
     incomplete_marker = dest_dir / ".incomplete"
@@ -80,6 +85,7 @@ def backup_card(source: Path, label: str = "card") -> dict:
     status.update_sdcard(
         connected=True,
         label=label,
+        filesystem=fstype,
         mount_point=str(source),
     )
 
@@ -166,6 +172,15 @@ def backup_card(source: Path, label: str = "card") -> dict:
             log.error("Eroare la copiere %s: %s", rel, e)
             errors.append({"path": rel, "error": str(e)})
 
+        # Persist dedup incremental: daca se scoate cardul / pică curentul,
+        # fisierele deja verificate raman marcate -> retry-ul copiaza doar restul.
+        if copied_count and copied_count % 25 == 0:
+            tracker.save()
+
+    # Persistam tracker-ul indiferent de rezultat (succes / eroare / cancel),
+    # ca fisierele verificate sa nu fie re-copiate la urmatoarea inserare.
+    tracker.save()
+
     summary["copied_bytes"] = copied_bytes
     summary["errors"] = errors
     summary["finished_at"] = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -188,7 +203,6 @@ def backup_card(source: Path, label: str = "card") -> dict:
                 "dest": str(dest_dir), "ok": False, "errors": len(errors)}
 
     incomplete_marker.unlink()
-    tracker.save()
     log.info("Backup OK: %s (%d fisiere, %.1f MB)", dest_dir, len(new_files), copied_bytes / 1024 / 1024)
     status.update_backup(
         force=True, state="completed", current_file=None,

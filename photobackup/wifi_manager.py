@@ -10,12 +10,14 @@ Monitorizare continua:
   - Mod client: daca se pierde conexiunea > 60s => revine la AP.
   - Mod AP: asculta comenzi din /tmp/photobackup-wifi.cmd (scris de API).
 
-Comenzi suportate (/tmp/photobackup-wifi.cmd):
-  connect:<ssid>:<password>   -> opreste AP, conecteaza client
-  disconnect                  -> deconecteaza client, revine la AP
-  start-ap                    -> forteaza pornirea AP
-  rescan                      -> rescan Wi-Fi (util pentru API)
-  set-ap:<ssid>:<password>    -> modifica setari AP (persistent)
+Comenzi suportate (coada de fisiere JSON in /tmp/photobackup-wifi.cmd.d/,
+fiecare {"cmd": ...}):
+  {"cmd":"connect","ssid":..,"password":..}  -> opreste AP, conecteaza client
+  {"cmd":"disconnect"}                       -> deconecteaza client, revine la AP
+  {"cmd":"start-ap"}                         -> forteaza pornirea AP
+  {"cmd":"rescan"}                           -> rescan Wi-Fi (util pentru API)
+  {"cmd":"set-ap","ssid":..,"password":..}   -> modifica setari AP (persistent)
+  {"cmd":"delete-saved","ssid":..}           -> sterge o retea salvata
 
 State publicat in /tmp/wifi_state.json:
   {"mode":"ap"|"client", "ap_ssid":..., "ap_password":..., "ap_ip":...,
@@ -41,7 +43,7 @@ DEFAULT_AP_SSID = "PhotoBackup-AP"
 DEFAULT_AP_PASSWORD = "photobackup123"
 
 STATE_FILE = Path("/tmp/wifi_state.json")
-CMD_FILE = Path("/tmp/photobackup-wifi.cmd")
+CMD_DIR = Path("/tmp/photobackup-wifi.cmd.d")
 CONFIG_DIR = Path("/etc/photobackup")
 CONFIG_FILE = CONFIG_DIR / "wifi.conf"
 LOG_FILE = Path("/var/log/photobackup-wifi.log")
@@ -305,13 +307,21 @@ def write_state(mode: str, ap_ssid: str, ap_password: str,
         log.warning("write_state esuat: %s", e)
 
 
-def consume_command() -> str | None:
-    if not CMD_FILE.exists():
-        return None
+def consume_command() -> dict | None:
+    """Scoate cea mai veche comanda din coada (un fisier JSON per comanda)."""
     try:
-        cmd = CMD_FILE.read_text().strip()
-        CMD_FILE.unlink(missing_ok=True)
-        return cmd or None
+        if not CMD_DIR.is_dir():
+            return None
+        files = sorted(f for f in CMD_DIR.iterdir() if f.suffix == ".json")
+        if not files:
+            return None
+        path = files[0]
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            data = None
+        path.unlink(missing_ok=True)
+        return data if isinstance(data, dict) else None
     except OSError:
         return None
 
@@ -344,38 +354,39 @@ def main() -> int:
 
     lost_since: float | None = None
     while True:
-        # 1) comenzi externe
+        # 1) comenzi externe (dict JSON din coada)
         cmd = consume_command()
         if cmd:
-            log.info("Comanda primita: %s", cmd.split(":", 1)[0])
+            action = cmd.get("cmd")
+            log.info("Comanda primita: %s", action)
             try:
-                if cmd.startswith("connect:"):
-                    _, rest = cmd.split(":", 1)
-                    ssid, _, password = rest.partition(":")
-                    if connect_client(ssid, password or None):
+                if action == "connect":
+                    ssid = cmd.get("ssid", "")
+                    password = cmd.get("password") or None
+                    if ssid and connect_client(ssid, password):
                         mode = "client"
                     else:
                         start_ap(ap_ssid, ap_password)
                         mode = "ap"
-                elif cmd == "disconnect":
+                elif action == "disconnect":
                     disconnect_client()
                     start_ap(ap_ssid, ap_password)
                     mode = "ap"
-                elif cmd == "start-ap":
+                elif action == "start-ap":
                     start_ap(ap_ssid, ap_password)
                     mode = "ap"
-                elif cmd == "rescan":
+                elif action == "rescan":
                     _nmcli("device", "wifi", "rescan", "ifname", WLAN_IFACE, timeout=15)
-                elif cmd.startswith("set-ap:"):
-                    _, rest = cmd.split(":", 1)
-                    new_ssid, _, new_pw = rest.partition(":")
-                    ap_ssid, ap_password = new_ssid, new_pw
+                elif action == "set-ap":
+                    ap_ssid = cmd.get("ssid") or ap_ssid
+                    ap_password = cmd.get("password") or ap_password
                     save_ap_config({"ap_ssid": ap_ssid, "ap_password": ap_password})
                     if mode == "ap":
                         start_ap(ap_ssid, ap_password)
-                elif cmd.startswith("delete-saved:"):
-                    _, ssid = cmd.split(":", 1)
-                    delete_saved(ssid)
+                elif action == "delete-saved":
+                    ssid = cmd.get("ssid")
+                    if ssid:
+                        delete_saved(ssid)
             except Exception as e:
                 log.exception("Eroare comanda %s: %s", cmd, e)
 

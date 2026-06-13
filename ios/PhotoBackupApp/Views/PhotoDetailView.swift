@@ -22,7 +22,7 @@ struct PhotoDetailView: View {
             TabView(selection: $index) {
                 ForEach(Array(items.enumerated()), id: \.element.id) { idx, item in
                     ZoomableImage(
-                        url: api.thumbnailURL(sessionId: sessionId, filename: item.filename)
+                        url: api.previewURL(sessionId: sessionId, filename: item.filename)
                     )
                     .tag(idx)
                 }
@@ -50,14 +50,23 @@ struct PhotoDetailView: View {
                 .padding()
                 Spacer()
                 if items.indices.contains(index) {
-                    Text(items[index].filename)
-                        .foregroundStyle(.white)
-                        .font(.caption.monospaced())
-                        .padding(.vertical, 4)
-                        .padding(.horizontal, 10)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Capsule())
-                        .padding(.bottom)
+                    VStack(spacing: 8) {
+                        if let rating = items[index].rating, rating > 0 {
+                            StarsView(rating: rating, size: 16)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Capsule())
+                        }
+                        Text(items[index].filename)
+                            .foregroundStyle(.white)
+                            .font(.caption.monospaced())
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 10)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                    }
+                    .padding(.bottom)
                 }
             }
         }

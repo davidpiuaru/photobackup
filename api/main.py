@@ -1,12 +1,14 @@
 """FastAPI server pentru PhotoBackup — expus pe :8080 pentru app-ul iOS."""
 import logging
+from contextlib import asynccontextmanager
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .routes import backup, notifications, sessions, status, sync, thumbnails, wifi
+from .routes import backup, notifications, rating, sessions, status, sync, thumbnails, wifi
+from .services.auth import require_token
 
 LOG_FILE = Path("/var/log/photobackup-api.log")
 
@@ -27,7 +29,14 @@ def _setup_logging() -> None:
 _setup_logging()
 log = logging.getLogger("photobackup.api")
 
-app = FastAPI(title="PhotoBackup API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    log.info("PhotoBackup API pornit")
+    yield
+
+
+app = FastAPI(title="PhotoBackup API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,20 +46,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(status.router)
-app.include_router(wifi.router)
-app.include_router(backup.router)
-app.include_router(sync.router)
-app.include_router(sessions.router)
-app.include_router(thumbnails.router)
-app.include_router(notifications.router)
+# Token optional (dezactivat daca nu exista fisierul de token) pe toate rutele
+# de date/control. /api/ping ramane deschis pentru discovery.
+_auth = [Depends(require_token)]
+app.include_router(status.router, dependencies=_auth)
+app.include_router(wifi.router, dependencies=_auth)
+app.include_router(backup.router, dependencies=_auth)
+app.include_router(sync.router, dependencies=_auth)
+app.include_router(sessions.router, dependencies=_auth)
+app.include_router(thumbnails.router, dependencies=_auth)
+app.include_router(thumbnails.preview_router, dependencies=_auth)
+app.include_router(notifications.router, dependencies=_auth)
+app.include_router(rating.router, dependencies=_auth)
 
 
 @app.get("/api/ping")
 def ping() -> dict:
     return {"ok": True, "service": "photobackup-api"}
-
-
-@app.on_event("startup")
-async def on_startup():
-    log.info("PhotoBackup API pornit")

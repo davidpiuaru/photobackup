@@ -18,6 +18,22 @@ LED_RED_PIN = 27
 
 RCLONE_REMOTE = "gdrive:PhotoBackup"
 
+# ──────────────────────── rating AI (1-5 stele) ────────────────────────
+# Extensii de imagine recunoscute (pentru galerie + rating).
+RAW_EXT = {".cr2", ".cr3", ".arw", ".nef", ".raf", ".orf", ".rw2", ".dng"}
+IMAGE_EXT = {".jpg", ".jpeg", ".png", ".heic", ".heif"} | RAW_EXT
+
+# Model NIMA (ONNX) — pus manual pe Pi (vezi models/README.md). Daca lipseste,
+# scorer-ul cade pe euristica.
+MODELS_DIR = Path(__file__).resolve().parent.parent / "models"
+NIMA_MODEL = MODELS_DIR / "nima.onnx"
+
+# Mapare scor mediu NIMA (1-10) -> stele: <4.0=1, <4.75=2, <5.25=3, <5.75=4, else 5.
+RATING_THRESHOLDS = [4.0, 4.75, 5.25, 5.75]
+
+# Marker de lock per-sesiune cat ruleaza evaluarea (anti-dublare).
+RATING_LOCK_NAME = ".rating.lock"
+
 EXCLUDED_NAMES = {
     "System Volume Information",
     "$RECYCLE.BIN",

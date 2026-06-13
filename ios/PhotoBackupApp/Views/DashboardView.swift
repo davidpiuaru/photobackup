@@ -95,11 +95,11 @@ struct DashboardView: View {
                        icon: "sdcard",
                        level: s.sdcard.connected ? .ok : .inactive)
             statusCell(title: "Backup",
-                       value: s.backup.state.capitalized,
+                       value: s.backup.stateLabel,
                        icon: "arrow.down.circle",
                        level: backupLevel(s.backup.state))
             statusCell(title: "Sync",
-                       value: s.sync.state.capitalized,
+                       value: s.sync.stateLabel,
                        icon: "arrow.triangle.2.circlepath",
                        level: syncLevel(s.sync.state))
         }

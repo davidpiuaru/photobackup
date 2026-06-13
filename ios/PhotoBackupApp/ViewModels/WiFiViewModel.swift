@@ -32,6 +32,7 @@ final class WiFiViewModel {
         }
     }
 
+    @discardableResult
     func connect(ssid: String, password: String?) async -> Bool {
         connecting = true
         defer { connecting = false }
@@ -40,6 +41,8 @@ final class WiFiViewModel {
             let _: EmptyResponse = try await api.post("api/wifi/connect", body: req)
             return true
         } catch {
+            // In mod AP, raspunsul poate sa nu ajunga (Pi-ul cade de pe retea cat
+            // comuta) — nu e neaparat o eroare. Ecranul de tranzitie confirma.
             self.errorMessage = error.localizedDescription
             return false
         }

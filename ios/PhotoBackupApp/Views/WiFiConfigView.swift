@@ -169,13 +169,12 @@ struct WiFiConnectSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         Task {
-                            let ok = await vm.connect(ssid: network.ssid,
-                                                      password: network.isSecured ? password : nil)
-                            if ok {
-                                onSubmit(network.ssid)
-                            } else {
-                                showError = true
-                            }
+                            // Trimitem comanda; indiferent de raspuns trecem la ecranul
+                            // de tranzitie (in mod AP raspunsul poate sa nu ajunga, dar
+                            // Pi-ul comuta oricum, iar tranzitia face polling de reconectare).
+                            await vm.connect(ssid: network.ssid,
+                                             password: network.isSecured ? password : nil)
+                            onSubmit(network.ssid)
                         }
                     } label: {
                         if vm.connecting { ProgressView() } else { Text("Conectează") }

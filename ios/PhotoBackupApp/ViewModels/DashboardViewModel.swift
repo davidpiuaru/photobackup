@@ -44,6 +44,10 @@ final class DashboardViewModel {
             )
             if !notifs.isEmpty {
                 self.notifications.append(contentsOf: notifs)
+                // Plafonam istoricul local ca sa nu creasca nelimitat pe durata sesiunii.
+                if self.notifications.count > 100 {
+                    self.notifications.removeFirst(self.notifications.count - 100)
+                }
                 self.lastNotificationId = notifs.map(\.id).max() ?? lastNotificationId
                 let settings = AppSettings.load()
                 NotificationService.shared.processIncoming(notifs, enabled: settings.notificationsEnabled)

@@ -19,9 +19,10 @@ def sync_status() -> SyncState:
 
 @router.post("/start")
 def sync_start() -> dict:
-    # Declanseaza manual timer-ul systemd (oneshot)
+    # Declanseaza manual unit-ul oneshot de sync. API-ul ruleaza ca `admin`, deci
+    # pornirea unui unit de sistem necesita sudo (vezi systemd/photobackup-sync.sudoers).
     r = subprocess.run(
-        ["systemctl", "start", "photobackup-sync.service"],
+        ["sudo", "-n", "systemctl", "start", "photobackup-sync.service"],
         capture_output=True, text=True,
     )
     if r.returncode != 0:

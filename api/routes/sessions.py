@@ -7,8 +7,19 @@ from fastapi import APIRouter, HTTPException
 from photobackup import config
 
 from ..models import PaginatedThumbnails, SessionDetail, SessionFile, SessionSummary, ThumbnailEntry
+from ..services.safe_paths import safe_join, valid_session_id
 
 router = APIRouter(prefix="/api/sessions")
+
+
+def _resolve_session_dir(session_id: str) -> Path:
+    """Directorul sesiunii, validat anti-traversal. 404 daca invalid/inexistent."""
+    if not valid_session_id(session_id):
+        raise HTTPException(404, "Sesiune inexistenta")
+    session_dir = safe_join(config.BACKUPS_DIR, session_id)
+    if session_dir is None or not session_dir.is_dir():
+        raise HTTPException(404, "Sesiune inexistenta")
+    return session_dir
 
 
 def _sync_completed_set() -> set[str]:
@@ -64,9 +75,7 @@ def list_sessions() -> list[SessionSummary]:
 
 @router.get("/{session_id}", response_model=SessionDetail)
 def session_detail(session_id: str) -> SessionDetail:
-    session_dir = config.BACKUPS_DIR / session_id
-    if not session_dir.is_dir():
-        raise HTTPException(404, "Sesiune inexistenta")
+    session_dir = _resolve_session_dir(session_id)
     completed = _sync_completed_set()
     summary = _session_summary(session_dir, completed)
     manifest = _load_manifest(session_dir)
@@ -76,15 +85,10 @@ def session_detail(session_id: str) -> SessionDetail:
 
 @router.get("/{session_id}/thumbnails", response_model=PaginatedThumbnails)
 def session_thumbnails(session_id: str, page: int = 1, per_page: int = 50) -> PaginatedThumbnails:
-    session_dir = config.BACKUPS_DIR / session_id
-    if not session_dir.is_dir():
-        raise HTTPException(404, "Sesiune inexistenta")
+    session_dir = _resolve_session_dir(session_id)
     manifest = _load_manifest(session_dir)
     files = manifest.get("files", [])
-    # filtrare imagini
-    IMAGE_EXT = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".cr2", ".cr3",
-                 ".arw", ".nef", ".raf", ".orf", ".rw2", ".dng"}
-    images = [f for f in files if Path(f["path"]).suffix.lower() in IMAGE_EXT]
+    images = [f for f in files if Path(f["path"]).suffix.lower() in config.IMAGE_EXT]
     total = len(images)
     page = max(1, page)
     per_page = max(1, min(per_page, 200))
@@ -95,6 +99,7 @@ def session_thumbnails(session_id: str, page: int = 1, per_page: int = 50) -> Pa
             filename=f["path"],
             size=int(f.get("size", 0)),
             url=f"/api/thumbnails/{session_id}/{f['path']}",
+            rating=f.get("rating"),
         )
         for f in chunk
     ]

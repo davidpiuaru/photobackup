@@ -24,6 +24,8 @@ _EMPTY = {
              "eta_seconds": 0, "current_session": None},
     "sdcard": {"connected": False, "label": None, "filesystem": None,
                "size_bytes": 0, "used_bytes": 0, "mount_point": None},
+    "rating": {"state": "idle", "session_id": None, "current_file": None,
+               "files_done": 0, "files_total": 0, "method": None, "started_at": None},
     "notifications": [],
 }
 

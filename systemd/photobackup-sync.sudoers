@@ -1,0 +1,10 @@
+# PhotoBackup — permite API-ului (user `admin`) sa declanseze sync-ul manual
+# („Force Sync Now") fara parola. Fara aceasta regula, POST /api/sync/start
+# esueaza cu „Interactive authentication required".
+#
+# Instalare:
+#   sudo install -m 0440 systemd/photobackup-sync.sudoers /etc/sudoers.d/photobackup-sync
+#   sudo visudo -c            # valideaza sintaxa
+#
+# Daca `which systemctl` difera de /usr/bin/systemctl, ajusteaza calea de mai jos.
+admin ALL=(root) NOPASSWD: /usr/bin/systemctl start photobackup-sync.service

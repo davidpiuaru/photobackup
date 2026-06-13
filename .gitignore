@@ -18,3 +18,6 @@ ios/DerivedData/
 
 # Planning docs (not part of the codebase)
 CLAUDE_CODE_PROMPT_*.md
+
+# Model AI (binar mare — se pune manual pe Pi, vezi models/README.md)
+models/*.onnx
