@@ -20,9 +20,6 @@ try:
 except ImportError:
     _ORT_OK = False
 
-_IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-_IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-
 
 def stars_from_mean(mean: float) -> int:
     """Mapare scor mediu NIMA (1-10) -> 1..5 stele prin pragurile din config."""
@@ -113,7 +110,8 @@ class Scorer:
     def _nima_mean(self, image: Image.Image) -> float:
         h, w, nchw = self._hw_layout()
         rgb = image.convert("RGB").resize((w, h))
-        arr = (np.asarray(rgb, dtype=np.float32) / 255.0 - _IMAGENET_MEAN) / _IMAGENET_STD
+        # Preprocesare MobileNet (modelul NIMA idealo): scalare in [-1, 1].
+        arr = np.asarray(rgb, dtype=np.float32) / 127.5 - 1.0
         arr = np.transpose(arr, (2, 0, 1)) if nchw else arr
         arr = np.expand_dims(arr, 0).astype(np.float32)
         out = self.session.run(None, {self._input_name: arr})[0]

@@ -12,24 +12,28 @@ Calea e configurată în [`photobackup/config.py`](../photobackup/config.py)
 scorer-ul cade automat pe **euristică** (claritate/expunere/contrast) — deci
 funcționalitatea merge și fără model, doar mai puțin „inteligent".
 
-## Cerințe model
-- Backbone tipic: MobileNet (NIMA aesthetic), antrenat pe AVA.
-- **Input:** imagine 224×224 RGB. Scorer-ul detectează automat layout-ul
-  (NCHW `1×3×224×224` sau NHWC `1×224×224×3`) din metadatele ONNX și aplică
-  normalizare ImageNet.
+## Modelul folosit
+- **Backbone:** MobileNet (NIMA aesthetic), antrenat pe setul **AVA**; greutăți din
+  proiectul open-source *idealo/image-quality-assessment* (~3.2M parametri, ONNX ~13 MB).
+- **Input:** imagine 224×224 RGB, NHWC (`1×224×224×3`). Scorer-ul detectează
+  automat layout-ul (NCHW/NHWC) din metadatele ONNX. **Preprocesare: `[-1, 1]`**
+  (`x/127.5 - 1`, specific MobileNet) — implementată în `photobackup/scoring.py`.
 - **Output:** vector de **10** valori (distribuție peste scorurile 1–10).
   Scorer-ul calculează media ponderată → 1–10, apoi o mapează la 1–5 stele prin
   `config.RATING_THRESHOLDS`.
 
-## Cum obții modelul
-- Conversie din proiectul *idealo/image-quality-assessment* (Keras → ONNX), sau
-- Un model NIMA aesthetic ONNX pre-convertit (ex. de pe Hugging Face).
-
-Apoi, pe Pi:
+## Cum (re)generezi modelul
+Pe o mașină de dezvoltare cu **Python 3.11** (conversia folosește TensorFlow):
 ```bash
-NIMA_URL="https://.../nima.onnx" ./scripts/get_nima_model.sh
-sudo systemctl restart photobackup-api   # (rater-ul îl încarcă la fiecare rulare)
+python3.11 -m venv venv
+./venv/bin/pip install "tensorflow==2.15.1" "tf2onnx==1.16.1" onnxruntime pillow
+./venv/bin/python scripts/convert_nima_to_onnx.py      # descarcă greutățile + exportă models/nima.onnx
 ```
+Apoi copiază modelul pe Pi (e prea mare pentru git — vezi `.gitignore`):
+```bash
+scp models/nima.onnx admin@photobackup.local:/home/admin/photobackup/models/
+```
+Rater-ul îl încarcă automat la următoarea evaluare (fără restart obligatoriu).
 
 ## Calibrare
 După ce pui modelul, evaluează câteva sesiuni și, dacă distribuția stelelor e

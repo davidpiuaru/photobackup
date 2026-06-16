@@ -2,11 +2,12 @@
 import logging
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 
-from photobackup import config
+from photobackup import config, status
 
 from ..models import RatingStatus
 from ..services import status_reader
@@ -37,6 +38,14 @@ def rate_session(session_id: str) -> dict:
         cwd=str(_REPO_ROOT),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+    )
+    # Marcam imediat "rating" (rater-ul porneste in cateva secunde — import onnxruntime
+    # e lent). Altfel polling-ul din app ar vedea statusul vechi (ex: "completed") si
+    # ar crede ca s-a terminat instant.
+    status.update_rating(
+        force=True, state="rating", session_id=session_id,
+        current_file=None, files_done=0, files_total=0, method=None,
+        started_at=datetime.now().isoformat(timespec="seconds"),
     )
     log.info("Evaluare pornita pentru sesiunea %s", session_id)
     return {"ok": True, "session_id": session_id}
